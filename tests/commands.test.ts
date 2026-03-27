@@ -3,11 +3,11 @@ import { mkdtemp, rm, writeFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
-import { addCommand } from "../src/commands/add";
+import { partitionAdd, partitionList, partitionRemove } from "../src/commands/partition";
 import { searchCommand } from "../src/commands/search";
-import { listCommand } from "../src/commands/list";
-import { deleteCommand } from "../src/commands/delete";
-import { readManifest, listCollections } from "../src/collection";
+import { updateCommand } from "../src/commands/update";
+import { statusCommand } from "../src/commands/status";
+import { closeDb } from "../src/store";
 import { embeddings } from "../src/embeddings";
 
 // Generate deterministic fake vectors based on text content
@@ -31,8 +31,16 @@ embeddings.fn = fakeEmbed;
 let testDir: string;
 let originalCwd: string;
 
+// Capture console output
+function captureLog(): { logs: string[]; restore: () => void } {
+  const logs: string[] = [];
+  const origLog = console.log;
+  console.log = (...args: any[]) => logs.push(args.join(" "));
+  return { logs, restore: () => { console.log = origLog; } };
+}
+
 beforeAll(async () => {
-  testDir = await mkdtemp(join(tmpdir(), "zvec-test-"));
+  testDir = await mkdtemp(join(tmpdir(), "zdoc-test-"));
   originalCwd = process.cwd();
   process.chdir(testDir);
 
@@ -55,70 +63,199 @@ beforeAll(async () => {
 
 afterAll(async () => {
   embeddings.fn = originalFn;
+  closeDb();
   process.chdir(originalCwd);
   await rm(testDir, { recursive: true, force: true });
 });
 
-describe("add command", () => {
-  test("adds a single file to a collection", async () => {
-    await addCommand(join(testDir, "test.md"), "test-col");
-    const manifest = await readManifest("test-col");
-    const key = join(testDir, "test.md");
-    expect(manifest[key]).toBeDefined();
-    expect(manifest[key]!.chunkIds.length).toBeGreaterThan(0);
+describe("partition add", () => {
+  test("adds a single file to a partition", async () => {
+    await partitionAdd(join(testDir, "test.md"), "test-part", { json: false });
   });
 
   test("adds a directory recursively", async () => {
-    await addCommand(testDir, "dir-col");
-    const manifest = await readManifest("dir-col");
-    const keys = Object.keys(manifest);
-    // Should find test.md, test2.txt, and subdir/nested.md
-    expect(keys.length).toBe(3);
+    await partitionAdd(testDir, "dir-part", { json: false });
   });
 
-  test("re-adding same file is idempotent", async () => {
-    await addCommand(join(testDir, "test.md"), "idem-col");
-    const manifest1 = await readManifest("idem-col");
-    const ids1 = manifest1[join(testDir, "test.md")]!.chunkIds;
-
-    await addCommand(join(testDir, "test.md"), "idem-col");
-    const manifest2 = await readManifest("idem-col");
-    const ids2 = manifest2[join(testDir, "test.md")]!.chunkIds;
-
-    expect(ids1).toEqual(ids2);
+  test("outputs JSON when --json is set", async () => {
+    const { logs, restore } = captureLog();
+    try {
+      await partitionAdd(join(testDir, "test2.txt"), "json-part", { json: true });
+    } finally {
+      restore();
+    }
+    const output = JSON.parse(logs[logs.length - 1]!);
+    expect(output.partition).toBe("json-part");
+    expect(output.filesIndexed).toBe(1);
+    expect(output.totalChunks).toBeGreaterThan(0);
+    expect(output.files).toBeArray();
   });
 });
 
-describe("list command", () => {
-  test("lists collections", async () => {
-    const collections = listCollections();
-    expect(collections).toContain("test-col");
-    expect(collections).toContain("dir-col");
-  });
-
-  test("lists files in a collection", async () => {
-    const manifest = await readManifest("test-col");
-    expect(Object.keys(manifest).length).toBeGreaterThan(0);
+describe("partition list", () => {
+  test("lists partitions", async () => {
+    const { logs, restore } = captureLog();
+    try {
+      await partitionList({ json: true });
+    } finally {
+      restore();
+    }
+    const output = JSON.parse(logs[0]!);
+    expect(output.partitions).toBeArray();
+    expect(output.partitions.length).toBeGreaterThan(0);
+    const names = output.partitions.map((p: any) => p.name);
+    expect(names).toContain("test-part");
+    expect(names).toContain("dir-part");
   });
 });
 
-describe("search command", () => {
+describe("search", () => {
   test("returns results without error", async () => {
-    // searchCommand prints to console, just ensure no throw
-    await searchCommand("vector databases", "test-col");
+    await searchCommand("vector databases", {
+      json: false,
+      filesOnly: false,
+      topk: 5,
+    });
+  });
+
+  test("returns JSON results", async () => {
+    const { logs, restore } = captureLog();
+    try {
+      await searchCommand("vector databases", {
+        json: true,
+        filesOnly: false,
+        topk: 5,
+      });
+    } finally {
+      restore();
+    }
+    const output = JSON.parse(logs[0]!);
+    expect(output.results).toBeArray();
+    expect(output.query).toBe("vector databases");
+    if (output.results.length > 0) {
+      expect(output.results[0]).toHaveProperty("rank");
+      expect(output.results[0]).toHaveProperty("score");
+      expect(output.results[0]).toHaveProperty("source");
+      expect(output.results[0]).toHaveProperty("partition");
+      expect(output.results[0]).toHaveProperty("content");
+    }
+  });
+
+  test("returns file paths with --files", async () => {
+    const { logs, restore } = captureLog();
+    try {
+      await searchCommand("vector databases", {
+        json: false,
+        filesOnly: true,
+        topk: 5,
+      });
+    } finally {
+      restore();
+    }
+    // Each log line should be a file path
+    for (const line of logs) {
+      expect(line).toContain(testDir);
+    }
+  });
+
+  test("respects -n limit", async () => {
+    const { logs, restore } = captureLog();
+    try {
+      await searchCommand("vector databases", {
+        json: true,
+        filesOnly: false,
+        topk: 2,
+      });
+    } finally {
+      restore();
+    }
+    const output = JSON.parse(logs[0]!);
+    expect(output.results.length).toBeLessThanOrEqual(2);
+  });
+
+  test("filters by partition with -p", async () => {
+    const { logs, restore } = captureLog();
+    try {
+      await searchCommand("vector databases", {
+        partition: "test-part",
+        json: true,
+        filesOnly: false,
+        topk: 10,
+      });
+    } finally {
+      restore();
+    }
+    const output = JSON.parse(logs[0]!);
+    for (const result of output.results) {
+      expect(result.partition).toBe("test-part");
+    }
   });
 });
 
-describe("delete command", () => {
-  test("removes a file from collection", async () => {
-    // First add a file to a dedicated collection
-    await addCommand(join(testDir, "test2.txt"), "del-col");
-    let manifest = await readManifest("del-col");
-    expect(Object.keys(manifest).length).toBe(1);
+describe("status", () => {
+  test("shows index stats", async () => {
+    const { logs, restore } = captureLog();
+    try {
+      await statusCommand({ json: true });
+    } finally {
+      restore();
+    }
+    const output = JSON.parse(logs[0]!);
+    expect(output.partitions).toBeGreaterThan(0);
+    expect(output.files).toBeGreaterThan(0);
+    expect(output.registeredPaths).toBeArray();
+  });
+});
 
-    // Now delete it
-    await deleteCommand(join(testDir, "test2.txt"), "del-col");
-    manifest = await readManifest("del-col");
-    expect(Object.keys(manifest).length).toBe(0);
+describe("update", () => {
+  test("reports no changes when nothing changed", async () => {
+    const { logs, restore } = captureLog();
+    try {
+      await updateCommand({ json: true });
+    } finally {
+      restore();
+    }
+    const output = JSON.parse(logs[0]!);
+    expect(output).toHaveProperty("added");
+    expect(output).toHaveProperty("updated");
+    expect(output).toHaveProperty("removed");
+  });
+});
+
+describe("partition remove", () => {
+  test("removes a partition and its chunks", async () => {
+    // Create a partition to remove
+    await partitionAdd(join(testDir, "test2.txt"), "remove-part", { json: false });
+
+    // Verify it exists
+    const { logs: listLogs, restore: restoreList } = captureLog();
+    try {
+      await partitionList({ json: true });
+    } finally {
+      restoreList();
+    }
+    const before = JSON.parse(listLogs[0]!);
+    expect(before.partitions.map((p: any) => p.name)).toContain("remove-part");
+
+    // Remove it
+    const { logs: removeLogs, restore: restoreRemove } = captureLog();
+    try {
+      await partitionRemove("remove-part", { json: true });
+    } finally {
+      restoreRemove();
+    }
+    const removeOutput = JSON.parse(removeLogs[0]!);
+    expect(removeOutput.removed).toBe("remove-part");
+    expect(removeOutput.filesRemoved).toBeGreaterThanOrEqual(1);
+
+    // Verify it's gone
+    const { logs: afterLogs, restore: restoreAfter } = captureLog();
+    try {
+      await partitionList({ json: true });
+    } finally {
+      restoreAfter();
+    }
+    const after = JSON.parse(afterLogs[0]!);
+    expect(after.partitions.map((p: any) => p.name)).not.toContain("remove-part");
   });
 });

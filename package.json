@@ -1,8 +1,10 @@
 {
-  "name": "zvec-simple-cli",
+  "name": "zdoc",
   "module": "index.ts",
   "type": "module",
-  "private": true,
+  "bin": {
+    "zdoc": "./index.ts"
+  },
   "devDependencies": {
     "@types/bun": "latest"
   },

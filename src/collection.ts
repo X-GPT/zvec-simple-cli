@@ -7,38 +7,35 @@ import {
   ZVecMetricType,
   type ZVecCollection,
 } from "@zvec/zvec";
-import { existsSync, mkdirSync, readdirSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 
-const BASE_DIR = ".zvec-data";
+const BASE_DIR = ".zdoc-data";
+const COLLECTION_NAME = "_index";
 
 export const VECTOR_FIELD = "embedding";
 export const FIELDS = {
   source: "source",
   chunkIndex: "chunk_index",
   content: "content",
+  partition: "partition",
 } as const;
 
-export function collectionPath(name: string): string {
-  return join(BASE_DIR, name, "collection");
+function collectionPath(): string {
+  return join(BASE_DIR, COLLECTION_NAME);
 }
 
-export function manifestPath(name: string): string {
-  return join(BASE_DIR, name, "manifest.json");
-}
-
-export function openOrCreateCollection(name: string): ZVecCollection {
-  const colPath = collectionPath(name);
-  const dirPath = join(BASE_DIR, name);
+function openOrCreateCollection(): ZVecCollection {
+  const colPath = collectionPath();
 
   if (existsSync(colPath)) {
     return ZVecOpen(colPath);
   }
 
-  mkdirSync(dirPath, { recursive: true });
+  mkdirSync(BASE_DIR, { recursive: true });
 
   const schema = new ZVecCollectionSchema({
-    name,
+    name: COLLECTION_NAME,
     vectors: {
       name: VECTOR_FIELD,
       dataType: ZVecDataType.VECTOR_FP32,
@@ -54,6 +51,13 @@ export function openOrCreateCollection(name: string): ZVecCollection {
       { name: FIELDS.source, dataType: ZVecDataType.STRING },
       { name: FIELDS.chunkIndex, dataType: ZVecDataType.INT32 },
       { name: FIELDS.content, dataType: ZVecDataType.STRING },
+      {
+        name: FIELDS.partition,
+        dataType: ZVecDataType.STRING,
+        indexParams: {
+          indexType: ZVecIndexType.INVERT,
+        },
+      },
     ],
   });
 
@@ -61,10 +65,9 @@ export function openOrCreateCollection(name: string): ZVecCollection {
 }
 
 export async function withCollection<T>(
-  name: string,
   fn: (collection: ZVecCollection) => T | Promise<T>
 ): Promise<T> {
-  const collection = openOrCreateCollection(name);
+  const collection = openOrCreateCollection();
   try {
     return await fn(collection);
   } finally {
@@ -72,34 +75,9 @@ export async function withCollection<T>(
   }
 }
 
-export interface ManifestEntry {
-  chunkIds: string[];
-  addedAt: string;
-}
-
-export type Manifest = Record<string, ManifestEntry>;
-
-export async function readManifest(name: string): Promise<Manifest> {
-  const path = manifestPath(name);
-  const file = Bun.file(path);
-  if (await file.exists()) {
-    return file.json();
-  }
-  return {};
-}
-
-export async function writeManifest(
-  name: string,
-  manifest: Manifest
-): Promise<void> {
-  const path = manifestPath(name);
-  await Bun.write(path, JSON.stringify(manifest, null, 2));
-}
-
-export function listCollections(): string[] {
-  if (!existsSync(BASE_DIR)) return [];
-  const entries = readdirSync(BASE_DIR, { withFileTypes: true });
-  return entries.filter((e) => e.isDirectory()).map((e) => e.name);
+export function fieldFilter(fieldName: string, value: string): string {
+  const escaped = value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+  return `${fieldName} = "${escaped}"`;
 }
 
 export function generateId(filePath: string, chunkIndex: number): string {

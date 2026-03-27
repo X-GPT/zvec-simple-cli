@@ -20,7 +20,7 @@ function fakeEmbed(texts: string[]): Promise<number[][]> {
         vec[i] = Math.sin(Number(hash) + i) * 0.5;
       }
       return vec;
-    })
+    }),
   );
 }
 
@@ -37,11 +37,20 @@ beforeAll(async () => {
   process.chdir(testDir);
 
   // Create test files
-  await writeFile(join(testDir, "test.md"), "# Hello World\n\nThis is a test document about vector databases and semantic search.\n\nVector databases store embeddings for fast similarity search.");
-  await writeFile(join(testDir, "test2.txt"), "Another document about machine learning and neural networks.");
+  await writeFile(
+    join(testDir, "test.md"),
+    "# Hello World\n\nThis is a test document about vector databases and semantic search.\n\nVector databases store embeddings for fast similarity search.",
+  );
+  await writeFile(
+    join(testDir, "test2.txt"),
+    "Another document about machine learning and neural networks.",
+  );
 
   await mkdir(join(testDir, "subdir"), { recursive: true });
-  await writeFile(join(testDir, "subdir", "nested.md"), "A nested markdown file about natural language processing.");
+  await writeFile(
+    join(testDir, "subdir", "nested.md"),
+    "A nested markdown file about natural language processing.",
+  );
 });
 
 afterAll(async () => {
@@ -56,7 +65,7 @@ describe("add command", () => {
     const manifest = await readManifest("test-col");
     const key = join(testDir, "test.md");
     expect(manifest[key]).toBeDefined();
-    expect(manifest[key].chunkIds.length).toBeGreaterThan(0);
+    expect(manifest[key]!.chunkIds.length).toBeGreaterThan(0);
   });
 
   test("adds a directory recursively", async () => {

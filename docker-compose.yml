@@ -1,0 +1,7 @@
+services:
+  zvec:
+    build: .
+    env_file: .env
+    volumes:
+      - ./.zvec-data:/app/.zvec-data
+      - ./docs:/app/docs:ro

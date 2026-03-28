@@ -5,7 +5,8 @@ ZDOC="zdoc"
 PASS=0
 FAIL=0
 
-trap 'rm -rf /tmp/testdocs' EXIT
+TESTDIR=$(mktemp -d)
+trap 'rm -rf "$TESTDIR"' EXIT
 
 run_test() {
   local name="$1"
@@ -65,18 +66,17 @@ run_test_grep "partition list empty" "No partitions" $ZDOC partition list
 run_test_grep "partition list --json empty" '"partitions":\[\]' $ZDOC partition list --json
 
 # Create test files
-mkdir -p /tmp/testdocs
-echo "The quick brown fox jumps over the lazy dog." > /tmp/testdocs/doc1.txt
-echo "Vector databases store embeddings for similarity search." > /tmp/testdocs/doc2.txt
+echo "The quick brown fox jumps over the lazy dog." > $TESTDIR/doc1.txt
+echo "Vector databases store embeddings for similarity search." > $TESTDIR/doc2.txt
 
 # Partition add (will fail without OPENAI_API_KEY, but should fail gracefully)
-run_test_expect_fail "partition add without API key" $ZDOC partition add /tmp/testdocs --name test
+run_test_expect_fail "partition add without API key" $ZDOC partition add $TESTDIR --name test
 
 # Partition remove non-existent
 run_test_expect_fail "partition remove non-existent" $ZDOC partition remove --name nonexistent
 
 # Missing required args
-run_test_expect_fail "partition add missing --name" $ZDOC partition add /tmp/testdocs
+run_test_expect_fail "partition add missing --name" $ZDOC partition add $TESTDIR
 run_test_expect_fail "partition add missing path" $ZDOC partition add --name test
 run_test_expect_fail "search missing query" $ZDOC search
 

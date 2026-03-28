@@ -1,3 +1,5 @@
+// Default import required: @zvec/zvec is a CJS native addon, and Node.js ESM
+// cannot use named imports from CJS modules.
 import zvec from "@zvec/zvec";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync } from "node:fs";

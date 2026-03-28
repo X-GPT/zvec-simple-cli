@@ -1,0 +1,9 @@
+node_modules
+dist
+.zdoc-data
+.zdoc-data
+.env
+.env.*
+.git
+.claude
+.cursor

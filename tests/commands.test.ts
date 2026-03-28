@@ -1,4 +1,5 @@
-import { test, expect, describe, beforeAll, afterAll } from "bun:test";
+import { test, expect, describe, beforeAll, afterAll } from "vitest";
+import { createHash } from "node:crypto";
 import { mkdtemp, rm, writeFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -14,10 +15,11 @@ import { embeddings } from "../src/embeddings";
 function fakeEmbed(texts: string[]): Promise<number[][]> {
   return Promise.resolve(
     texts.map((text) => {
-      const hash = Bun.hash(text);
+      const hash = createHash("md5").update(text).digest();
+      const seed = hash.readUInt32LE(0);
       const vec = new Array(1536);
       for (let i = 0; i < 1536; i++) {
-        vec[i] = Math.sin(Number(hash) + i) * 0.5;
+        vec[i] = Math.sin(seed + i) * 0.5;
       }
       return vec;
     }),
@@ -88,7 +90,7 @@ describe("partition add", () => {
     expect(output.partition).toBe("json-part");
     expect(output.filesIndexed).toBe(1);
     expect(output.totalChunks).toBeGreaterThan(0);
-    expect(output.files).toBeArray();
+    expect(Array.isArray(output.files)).toBe(true);
   });
 });
 
@@ -101,7 +103,7 @@ describe("partition list", () => {
       restore();
     }
     const output = JSON.parse(logs[0]!);
-    expect(output.partitions).toBeArray();
+    expect(Array.isArray(output.partitions)).toBe(true);
     expect(output.partitions.length).toBeGreaterThan(0);
     const names = output.partitions.map((p: any) => p.name);
     expect(names).toContain("test-part");
@@ -130,7 +132,7 @@ describe("search", () => {
       restore();
     }
     const output = JSON.parse(logs[0]!);
-    expect(output.results).toBeArray();
+    expect(Array.isArray(output.results)).toBe(true);
     expect(output.query).toBe("vector databases");
     if (output.results.length > 0) {
       expect(output.results[0]).toHaveProperty("rank");
@@ -203,7 +205,7 @@ describe("status", () => {
     const output = JSON.parse(logs[0]!);
     expect(output.partitions).toBeGreaterThan(0);
     expect(output.files).toBeGreaterThan(0);
-    expect(output.registeredPaths).toBeArray();
+    expect(Array.isArray(output.registeredPaths)).toBe(true);
   });
 });
 

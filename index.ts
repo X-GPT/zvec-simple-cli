@@ -1,4 +1,3 @@
-#!/usr/bin/env bun
 import { partitionAdd, partitionList, partitionRemove } from "./src/commands/partition";
 import { searchCommand } from "./src/commands/search";
 import { updateCommand } from "./src/commands/update";

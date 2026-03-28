@@ -13,6 +13,8 @@
   "scripts": {
     "build": "tsup",
     "test": "vitest run",
+    "test:docker": "docker build --platform linux/amd64 --target dev -t zdoc-dev . && docker run --platform linux/amd64 --rm zdoc-dev npx vitest run",
+    "test:cli": "docker build --platform linux/amd64 --target prod -t zdoc-test . && docker run --platform linux/amd64 --rm -v $(pwd)/tests/cli-test.sh:/tmp/cli-test.sh --entrypoint /bin/bash zdoc-test /tmp/cli-test.sh",
     "prepublishOnly": "npm run build"
   },
   "dependencies": {

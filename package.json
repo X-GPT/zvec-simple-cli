@@ -1,17 +1,34 @@
 {
   "name": "zdoc",
-  "module": "index.ts",
+  "version": "0.1.0",
+  "description": "CLI tool for semantic document indexing and search using vector embeddings",
+  "license": "MIT",
   "type": "module",
   "bin": {
-    "zdoc": "./index.ts"
+    "zdoc": "./dist/index.js"
   },
-  "devDependencies": {
-    "@types/bun": "latest"
-  },
-  "peerDependencies": {
-    "typescript": "^5"
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "test:docker": "docker build --platform linux/amd64 --target dev -t zdoc-dev . && docker run --platform linux/amd64 --rm zdoc-dev npx vitest run",
+    "test:cli": "docker build --platform linux/amd64 --target prod -t zdoc-test . && docker run --platform linux/amd64 --rm -v $(pwd)/tests/cli-test.sh:/tmp/cli-test.sh --entrypoint /bin/bash zdoc-test /tmp/cli-test.sh",
+    "prepublishOnly": "npm run build"
   },
   "dependencies": {
-    "@zvec/zvec": "^0.2.3"
+    "@zvec/zvec": "^0.2.3",
+    "better-sqlite3": "^11.0.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.0",
+    "@types/node": "^25.5.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5",
+    "vitest": "^4.1.2"
+  },
+  "engines": {
+    "node": ">=18"
   }
 }

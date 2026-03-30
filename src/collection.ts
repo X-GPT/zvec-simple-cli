@@ -1,14 +1,19 @@
-import {
+// Default import required: @zvec/zvec is a CJS native addon, and Node.js ESM
+// cannot use named imports from CJS modules.
+import zvec from "@zvec/zvec";
+import { createHash } from "node:crypto";
+import { existsSync, mkdirSync } from "node:fs";
+import { join } from "node:path";
+
+const {
   ZVecCreateAndOpen,
   ZVecOpen,
   ZVecCollectionSchema,
   ZVecDataType,
   ZVecIndexType,
   ZVecMetricType,
-  type ZVecCollection,
-} from "@zvec/zvec";
-import { existsSync, mkdirSync } from "node:fs";
-import { join } from "node:path";
+} = zvec;
+export type ZVecCollection = ReturnType<typeof ZVecOpen>;
 
 const BASE_DIR = ".zdoc-data";
 const COLLECTION_NAME = "_index";
@@ -81,7 +86,7 @@ export function fieldFilter(fieldName: string, value: string): string {
 }
 
 export function generateId(filePath: string, chunkIndex: number): string {
-  return new Bun.CryptoHasher("md5")
+  return createHash("md5")
     .update(`${filePath}:${chunkIndex}`)
     .digest("hex")
     .slice(0, 16);

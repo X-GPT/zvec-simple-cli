@@ -1,10 +1,10 @@
-import { test, expect, describe, beforeEach, afterEach, mock } from "bun:test";
+import { test, expect, describe, beforeEach, afterEach, vi } from "vitest";
 import { embed } from "../src/embeddings";
 
 const originalFetch = globalThis.fetch;
 
 function mockFetch(response: any, status = 200) {
-  globalThis.fetch = mock(() =>
+  globalThis.fetch = vi.fn(() =>
     Promise.resolve({
       ok: status >= 200 && status < 300,
       status,
@@ -66,7 +66,7 @@ describe("embed", () => {
 
   test("throws on missing API key", async () => {
     delete process.env.OPENAI_API_KEY;
-    expect(embed(["test"])).rejects.toThrow("Missing OPENAI_API_KEY");
+    await expect(embed(["test"])).rejects.toThrow("Missing OPENAI_API_KEY");
   });
 
   test("throws on API error with message", async () => {
@@ -74,12 +74,12 @@ describe("embed", () => {
       { error: { message: "Invalid API key" } },
       401
     );
-    expect(embed(["test"])).rejects.toThrow("OpenAI API error (401): Invalid API key");
+    await expect(embed(["test"])).rejects.toThrow("OpenAI API error (401): Invalid API key");
   });
 
   test("throws on API error without message", async () => {
     mockFetch({}, 500);
-    expect(embed(["test"])).rejects.toThrow("OpenAI API error (500)");
+    await expect(embed(["test"])).rejects.toThrow("OpenAI API error (500)");
   });
 
   test("sends correct request body", async () => {

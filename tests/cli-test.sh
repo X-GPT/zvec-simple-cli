@@ -6,6 +6,7 @@ PASS=0
 FAIL=0
 
 TESTDIR=$(mktemp -d)
+cd "$TESTDIR"
 trap 'rm -rf "$TESTDIR"' EXIT
 
 run_test() {

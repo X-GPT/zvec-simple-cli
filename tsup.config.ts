@@ -9,4 +9,5 @@ export default defineConfig({
   },
   splitting: false,
   clean: true,
+  external: ["@zvec/zvec", "better-sqlite3"],
 });
